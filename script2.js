@@ -46,10 +46,10 @@ async function initializeFirebase() { // Make it async
         console.log('⏳ [INIT] Importing Firebase modules...');
         try {
             const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js');
-            const { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, signInWithRedirect } = await import('https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js');
+            const { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js');
             const { getAnalytics } = await import('https://www.gstatic.com/firebasejs/12.2.1/firebase-analytics.js');
 
-            window.FirebaseModules = { initializeApp, getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, getAnalytics, getRedirectResult, signInWithRedirect };
+            window.FirebaseModules = { initializeApp, getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, getAnalytics };
             console.log('✅ [INIT] Firebase modules imported successfully within initializeFirebase');
         } catch (error) {
             console.error('❌ [INIT] Failed to import Firebase modules during initialization:', error);
@@ -103,7 +103,7 @@ function startApplication(auth, FirebaseModules) { // Accept auth and FirebaseMo
     }
 
     // const auth = window.firebaseAuth; // Now passed as argument
-    const { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, signInWithRedirect } = FirebaseModules; // Get from argument
+    const { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } = FirebaseModules; // Get from argument
 
     console.log('✅ [APP] Using Firebase Auth instance');
 
@@ -115,7 +115,7 @@ function startApplication(auth, FirebaseModules) { // Accept auth and FirebaseMo
     console.log('✅ [PROVIDER] Google Auth Provider configured with scopes: email, profile');
 
     // ... rest of the application code will be here
-    setupApplication(auth, provider, { signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, signInWithRedirect });
+    setupApplication(auth, provider, { signInWithPopup, signOut, onAuthStateChanged });
 }
 
 initializeFirebase();
@@ -138,7 +138,7 @@ function showStatus(message, type = 'info') {
 
 // Setup application with all authentication logic
 function setupApplication(auth, provider, firebaseFunctions) {
-    const { signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, signInWithRedirect } = firebaseFunctions;
+    const { signInWithPopup, signOut, onAuthStateChanged } = firebaseFunctions;
 
     // DOM elements with validation
     console.log('🔍 [DOM] Looking for DOM elements...');
@@ -162,12 +162,20 @@ function setupApplication(auth, provider, firebaseFunctions) {
 
         try {
             showStatusLocal('Выполняется вход...', 'loading');
-            console.log('📤 [SIGNIN] Initiating Google redirect...');
+            console.log('📤 [SIGNIN] Initiating Google popup...');
 
-            await signInWithRedirect(auth, provider);
-            // signInWithRedirect does not return a result here, page reloads
-            // Result will be handled on page load in onAuthStateChanged or getRedirectResult
-            showStatusLocal('Перенаправление для входа...', 'info');
+            const result = await signInWithPopup(auth, provider);
+            // signInWithPopup returns result immediately
+            const user = result.user;
+            console.log('✅ [SIGNIN] Popup sign-in successful!', {
+                userId: user.uid,
+                displayName: user.displayName,
+                email: user.email,
+                emailVerified: user.emailVerified,
+                photoURL: user.photoURL,
+                providerId: user.providerId
+            });
+            showStatusLocal('Вход выполнен успешно!', 'success');
 
         } catch (error) {
             console.error('❌ [SIGNIN] Sign-in failed:', {
@@ -185,8 +193,8 @@ function setupApplication(auth, provider, firebaseFunctions) {
                     console.log('ℹ️ [SIGNIN] User closed popup');
                     break;
                 case 'auth/popup-blocked':
-                    userMessage = 'Всплывающее окно заблокировано браузером (используется редирект, но может быть ошибка)';
-                    console.log('ℹ️ [SIGNIN] Popup blocked by browser (using redirect, but might be an issue)');
+                    userMessage = 'Всплывающее окно заблокировано браузером. Попробуйте разрешить всплывающие окна для этого сайта.';
+                    console.log('ℹ️ [SIGNIN] Popup blocked by browser');
                     break;
                 case 'auth/configuration-not-found':
                     userMessage = 'Ошибка конфигурации Firebase';
@@ -214,60 +222,26 @@ function setupApplication(auth, provider, firebaseFunctions) {
 
 
 
-    // Auth state observer disabled for initial load check
-    console.log('👂 [OBSERVER] Auth state observer disabled to prevent initial auth check');
-
-    // Handle redirect result with auto sign-out
-    getRedirectResult(auth)
-        .then(async (result) => {
-            if (result) {
-                // This is a redirect back from a sign-in flow.
-                const user = result.user;
-                console.log('✅ [SIGNIN] Redirect sign-in successful!', {
-                    userId: user.uid,
-                    displayName: user.displayName,
-                    email: user.email,
-                    emailVerified: user.emailVerified,
-                    photoURL: user.photoURL,
-                    providerId: user.providerId
-                });
-                showStatusLocal('Вход выполнен успешно через перенаправление!', 'success');
-
-                // Auto sign-out immediately after successful sign-in
-                console.log('🚪 [SIGNOUT] Auto signing out after successful authentication...');
-                try {
-                    await signOut(auth);
-                    console.log('✅ [SIGNOUT] Auto sign-out successful');
-                    showStatusLocal('Пользователь автоматически вышел из системы', 'info');
-                } catch (signOutError) {
-                    console.error('❌ [SIGNOUT] Auto sign-out failed:', signOutError);
-                    showStatusLocal('Ошибка автоматического выхода', 'error');
-                }
-            } else {
-                console.log('ℹ️ [SIGNIN] No redirect result found.');
-            }
-        })
-        .catch((error) => {
-            console.error('❌ [SIGNIN] Redirect sign-in failed:', {
-                code: error.code,
-                message: error.message,
-                customData: error.customData,
-                stack: error.stack
+    // Auth state observer with detailed logging
+    console.log('👂 [OBSERVER] Setting up auth state observer...');
+    onAuthStateChanged(auth, (user) => {
+        console.log('🔥 [OBSERVER] Auth state changed:', user ? 'user-present' : 'user-absent');
+        if (user) {
+            console.log('👤 [UI] User signed in:', {
+                uid: user.uid,
+                displayName: user.displayName,
+                email: user.email,
+                emailVerified: user.emailVerified,
+                isAnonymous: user.isAnonymous,
+                providerData: user.providerData
             });
-            let userMessage = 'Неизвестная ошибка входа через перенаправление';
-            switch (error.code) {
-                case 'auth/cancelled-popup-request':
-                case 'auth/popup-closed-by-user':
-                    userMessage = 'Вход отменен пользователем (после перенаправления)';
-                    break;
-                case 'auth/account-exists-with-different-credential':
-                    userMessage = 'Учетная запись уже существует с другими учетными данными';
-                    break;
-                default:
-                    userMessage = error.message;
-            }
-            showStatusLocal(`Ошибка входа через перенаправление: ${userMessage}`, 'error');
-        });
+            showStatusLocal('Пользователь вошел в систему', 'success');
+        } else {
+            console.log('🚪 [UI] User signed out');
+            showStatusLocal('Пользователь вышел из системы', 'info');
+        }
+    });
+
 
     // Event listeners with logging
     if (googleSignInBtn) {
