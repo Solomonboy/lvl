@@ -5,10 +5,6 @@
     box-sizing: border-box;
 }
 
-body {
-   
-}
-
 .container {
     background: white;
     border-radius: 15px;
@@ -40,20 +36,23 @@ h1 {
 
 /* Google sign-in button */
 .google-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    border: 2px solid #dadce0;
-    border-radius: 8px;
-    padding: 12px 24px;
-    font-size: 16px;
-    font-weight: 500;
-    color: #3c4043;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    min-height: 48px;
+    display: flex
+    ;
+    width: 100%;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 14px 24px;
+        border: 1px solid #e1e5e9;
+        border-radius: 18px;
+        background: #fff;
+        color: #1a1a1a;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s 
+    ease;
+        text-decoration: none;
 }
 
 .google-btn:hover {
